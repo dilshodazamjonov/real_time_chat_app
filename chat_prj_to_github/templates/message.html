@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Messages</title>
+    <!-- load static -->
+    {% load static %}
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"
+            integrity="sha512-894YE6QWD5I59HgZOGReFYm4dnWc1Qt5NtvYSaNcOP+u1T9qYdvdihz0PPSiiqn/+/3e7Jo4EaG7TubfWGUrMQ=="
+            crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+</head>
+<body>
+<div class="parent">
+    <div class="child-2">
+        <center><h2 style="margin-top: 5px; margin-bottom: 20px;">Welcome to Chat</h2></center>
+
+        <!-- Return to Main Page Button and Room Name -->
+        <div style="margin-bottom: 20px; display: flex; gap: 150px;">
+            <h3 style="color: black; text-align: left; margin-top: 10px; margin-left: 50px;">Current Room: {{ room_name }}</h3>
+            <a href="{% url 'create_main' %}" class="return-button">Return to Main Page</a>
+        </div>
+
+        <div class="chat-body-parent">
+            <div class="chat-body" id="tasks">
+                <div class="message" id="chatContainer">
+                    <!-- received messages and displayed here -->
+                    {% for message in messages %}
+                    {% if message.sender != user %}
+                    <div class="receive slide-in">
+                        <p class="message-text"><strong class="message-sender">{{ message.sender }}</strong> - {{ message.message }}</p>
+                    </div>
+                    {% else %}
+                    <div class="send slide-in">
+                        <p style="color: #000;">{{message.message}}</p>
+                    </div>
+                    {% endif %}
+                    {% endfor %}
+                    <!-- end receive messages -->
+                </div>
+
+                <div class="form">
+                    <form action="" id="message-form" method="POST">
+                        {% csrf_token %}
+                        <textarea id="msg" class="text-area-input" cols="30" name="message" rows="10" placeholder="Enter your message"
+                                  required></textarea>
+                        <button class="submit" type="submit">Send</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function scrollToBottom() {
+        var chatContainer = document.getElementById("chatContainer");
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+
+    // Scroll to the bottom when the page loads
+    window.onload = function() {
+        scrollToBottom();
+    };
+
+    const websocketProtocol = window.location.protocol === "https:" ? "wss" : "ws";
+    const wsEndpoint = `${websocketProtocol}://${window.location.host}/ws/notification/{{room_name}}/`;
+    const socket = new WebSocket(wsEndpoint);
+
+    document.getElementById('message-form').addEventListener('submit', function(event){
+        event.preventDefault();
+        sendMessage();
+    });
+
+    // Listen for "Enter" key press in textarea
+    document.getElementById('msg').addEventListener("keydown", function(event) {
+        if (event.key === "Enter" && !event.shiftKey) {
+            event.preventDefault(); // Prevent new line
+            sendMessage(); // Call send function
+        }
+    });
+
+    function sendMessage() {
+        const messageInput = document.getElementById('msg');
+        const message = messageInput.value.trim(); // Trim whitespace
+
+        if (message !== "") { // Prevent empty messages
+            socket.send(
+                JSON.stringify({
+                    'message': message,
+                    'room_name': '{{room_name}}',
+                    'sender': '{{user}}',
+                })
+            );
+            messageInput.value = ''; // Clear input field after sending
+        }
+    }
+
+    // Response from consumer on server
+    socket.addEventListener("message", (event) => {
+        const messageData = JSON.parse(event.data)['message'];
+        console.log(messageData);
+
+        var sender = messageData['sender'];
+        var message = messageData['message'];
+
+        var currentUser    = "{{ user|escapejs }}";
+
+        // Empty the message input field if the sender is the current user
+        if (sender === currentUser   ) {
+            document.getElementById('msg').value = '';
+        }
+
+        // Append the message to the chatbox
+        var messageDiv = document.querySelector('.message');
+        if (messageDiv) {
+            var newMessageDiv;
+            if (sender !== currentUser   ) {
+                newMessageDiv = document.createElement('div');
+                newMessageDiv.className = 'receive slide-in'; // Add slide-in class
+                newMessageDiv.innerHTML = '<p class="message-text"><strong class="message-sender">' + sender + '</strong> - ' + message + '</p>';
+            } else {
+                newMessageDiv = document.createElement('div');
+                newMessageDiv.className = 'send slide-in'; // Add slide-in class
+                newMessageDiv.innerHTML = '<p style="color: #000;">' + message + '</p>';
+            }
+            messageDiv.appendChild(newMessageDiv);
+            scrollToBottom(); // Scroll to the bottom after adding a new message
+        } else {
+            console.error("Message container not found.");
+        }
+    });
+
+    socket.onopen = (event) => {
+        console.log("WebSocket connection opened!");
+    };
+
+    socket.onclose = (event) => {
+        console.log("WebSocket connection closed!");
+    };
+</script>
+
+<style>
+    * {
+        padding: 0;
+        margin: 0;
+        box-sizing: border-box;
+        font-family: 'Arial', sans-serif;
+    }
+
+    body {
+        background: linear-gradient(to right, #5A90C5, #2D5274);
+        height: 125vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .parent {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 100%;
+        height: 100vh;
+    }
+
+    .child-2 {
+        width: 50%;
+        margin: 10px;
+        border-radius: 10px;
+        padding: 20px;
+        background: rgba(255, 255, 255, 0.2);
+        box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.3);
+        backdrop-filter: blur(12px);
+        animation: fadeIn 1s ease-in-out; /* Increased fade-in duration */
+    }
+
+    .return-button {
+        display: inline-block;
+        padding: 10px 20px;
+        background-color: #1976D2; /* Dark blue for button */
+        color: white;
+        border-radius: 5px;
+        text-decoration: none;
+        transition: background-color 0.3s ease, transform 0.2s ease; /* Add transform transition */
+    }
+
+    .return-button:hover {
+        background-color: #0D47A1; /* Darker blue on hover */
+        transform: scale(1.05); /* Slightly enlarge button on hover */
+    }
+
+    .chat-body-parent {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .chat-body, .message {
+        width: 100%;
+        background-color: #E3F2FD; /* Light blue background for chat body */
+        border-radius: 10px;
+        padding: 15px;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .message {
+        max-height: 400px;
+        overflow-y: auto;
+        background-color: #FFFFFF; /* White background for messages */
+        border: 1px solid #BBDEFB; /* Light blue border */
+    }
+
+    .chat-body .message .receive, .send {
+        max-width: 70%;
+        border-radius: 10px;
+        padding: 10px;
+        margin-bottom: 10px;
+        word-wrap: break-word;
+        opacity: 0; /* Start hidden for fade-in */
+        animation: slideIn 0.7s forwards; /* Increased slide-in duration */
+        transition: transform 0.3s ease; /* Added transition for hover effect */
+    }
+
+    .chat-body .message .receive {
+        align-self: flex-start;
+        background-color: #BBDEFB; /* Light blue for received messages */
+    }
+
+    .chat-body .message .send {
+        align-self: flex-end;
+        background-color: #90CAF9; /* Slightly darker blue for sent messages */
+    }
+
+    .chat-body .message .receive:hover,
+    .chat-body .message .send:hover {
+        padding: 10px; /* Slightly enlarge on hover */
+        /* No extra color change needed */
+    }
+
+    .message-sender {
+        font-size: 14px;
+        font-weight: bold;
+        color: #1976D2; /* Dark blue for sender name */
+        margin-bottom: 5px;
+    }
+
+    .message-text {
+        font-size: 14px;
+        color: #000;
+        margin: 0;
+    }
+
+    .text-area-input {
+        width: 100%;
+        max-width: 400px;
+        height: 40px;
+        padding: 10px;
+        border: 2px solid #1976D2; /* Dark blue border */
+        border-radius: 8px;
+        background-color: #E3F2FD; /* Light blue background */
+        font-size: 14px;
+        color: #333;
+        resize: none;
+        outline: none;
+        transition: all 0.3s ease-in-out;
+    }
+
+    .text-area-input:focus {
+        border-color: #0D47A1; /* Darker blue on focus */
+        box-shadow: 0px 0px 5px rgba(25, 118, 210, 0.5);
+    }
+
+    .text-area-input::placeholder {
+        color: #6c757d;
+        font-style: italic;
+    }
+
+    form {
+        display: flex;
+        align-items: center;
+        justify-content: space-around;
+        margin-top: 10px;
+    }
+
+    form button {
+        width: 25%;
+        padding: 10px;
+        background-color: #1976D2; /* Dark blue for button */
+        border-radius: 5px;
+        border: none;
+        color: #FFFFFF; /* White text */
+        cursor: pointer;
+        transition: background-color 0.3s ease, transform 0.2s ease; /* Add transform transition */
+    }
+
+    form button:hover {
+        background-color: #0D47A1; /* Darker blue on hover */
+        transform: scale(1.05); /* Slightly enlarge button on hover */
+    }
+
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+        }
+        to {
+            opacity: 1;
+        }
+    }
+
+    @keyframes slideIn {
+        from {
+            transform: translateX(-20px);
+            opacity: 0;
+        }
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+
+    @media only screen and (max-width: 600px) {
+        .child-2 {
+            width: 100%;
+        }
+    }
+</style>
+</body>
+</html>
